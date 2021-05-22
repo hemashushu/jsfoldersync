@@ -1,0 +1,35 @@
+{
+  "name": "jsfoldersync",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hemashushu/jsfoldersync.git"
+  },
+  "keywords": [
+    "utility",
+    "object"
+  ],
+  "author": "Hippo Spark <hippospark@gmail.com> (https://twitter.com/hemashushu)",
+  "license": "SEE LICENSE IN <LICENSE.md>",
+  "bugs": {
+    "url": "https://github.com/hemashushu/jsfoldersync/issues"
+  },
+  "homepage": "https://github.com/hemashushu/jsfoldersync#readme",
+  "devDependencies": {
+    "jsobjectutils": "github:hemashushu/jsobjectutils",
+    "jstextfile": "github:hemashushu/jstextfile",
+    "mocha": "^8.3.2",
+    "tmp": "^0.2.1",
+    "tmp-promise": "^3.0.2"
+  },
+  "dependencies": {
+    "fs-extra": "^10.0.0",
+    "jsfileutils": "github:hemashushu/jsfileutils",
+    "minimatch": "^3.0.4"
+  }
+}
