@@ -27,7 +27,7 @@ class FolderSync {
      * - 设置 ignoreFileGlobs 参数可以忽略源文件夹的部分内容。
      *
      * @param {*} sourceFolderPath 源文件夹的路径
-     * @param {*} destDirectory 目标位置，不包括源文件夹名称，即
+     * @param {*} destFolderPath 目标位置，不包括源文件夹名称，即
      *     最终目标文件夹将会是 'destDirectory + basename(sourceFolderPath)'
      * @param {*} deleteExtraneous boolean 值，是否删除目标文件夹里比源文件夹多出来的内容
      * @param {*} ignoreFileGlobs 字符串数组，一个用于忽略部分源文件的模式（pattern）列表。
@@ -60,13 +60,9 @@ class FolderSync {
      *     https://github.com/isaacs/minimatch
      * @param {*} callback 回调返回 (err)
      */
-    static sync(sourceFolderPath, destDirectory, deleteExtraneous, ignoreFileGlobs, callback) {
-        let sourceDirectory = path.dirname(sourceFolderPath);
-        let folderName = path.basename(sourceFolderPath);
-        let internalFolderPath = path.join('/', folderName);
-
-        FolderSync._syncFolder(sourceDirectory, destDirectory,
-            deleteExtraneous, ignoreFileGlobs, internalFolderPath, (err) => {
+    static sync(sourceFolderPath, destFolderPath, deleteExtraneous, ignoreFileGlobs, callback) {
+        FolderSync._syncFolder(sourceFolderPath, destFolderPath,
+            deleteExtraneous, ignoreFileGlobs, '/', (err) => {
                 if (err) {
                     callback(err);
                     return;
@@ -76,10 +72,37 @@ class FolderSync {
             });
     }
 
-    static _syncFolder(sourceDirectory, destDirectory, deleteExtraneous, ignoreFileGlobs, internalFolderPath, callback) {
+    /**
+     *
+     * @param {*} sourceFolderPath 当前的同步源文件夹路径
+     * @param {*} destFolderPath 当前的同步目标文件夹路径
+     * @param {*} deleteExtraneous
+     * @param {*} ignoreFileGlobs
+     * @param {*} internal_folder_path 方法内部使用的变量，表示**当前**正在同步
+     *     的文件夹相对路径（相对 sourceFolderPath 和 destFolderPath 来说）
+     *
+     *     必须以 '/' 字符开头，比如 '/foo'， '/foo/bar'
+     *     同步的第 1 层文件夹时的相对路径为 '/'
+     *
+     *     sourceFolderPath, destFolderPath 路径当中已经包含了
+     *     internal_folder_path，所以不要拼接它们。
+     *
+     * @param {*} callback
+     */
+    static _syncFolder(sourceFolderPath, destFolderPath, deleteExtraneous, ignoreFileGlobs, internal_folder_path, callback) {
 
-        // 'internalFolderPath' 是内部使用的变量，表示当前正在同步的文件夹路径（相对 sourceDirectory 来说）
+        // ## sourceFolderPath, destFolderPath:
+        // 当前正在同步的源文件夹路径和目标文件夹路径
+        //
+        // ## internal_folder_path
+        // 方法内部使用的变量，表示**当前**正在同步
+        // 的文件夹相对路径（相对 sourceFolderPath 和 destFolderPath 来说）
+        //
         // 必须以 '/' 字符开头，比如 '/foo'， '/foo/bar'
+        // 同步的第 1 层文件夹时的相对路径为 '/'
+        //
+        // sourceFolderPath, destFolderPath 路径当中已经包含了
+        // internal_folder_path，所以不要拼接它们。
 
         let processUpdateFolders = (toBeAddedFolderNames) => {
             if (toBeAddedFolderNames.length === 0) {
@@ -88,9 +111,13 @@ class FolderSync {
             }
 
             let folderName = toBeAddedFolderNames.pop();
-            let subFolderPath = path.join(internalFolderPath, folderName);
 
-            FolderSync._syncFolder(sourceDirectory, destDirectory, deleteExtraneous, ignoreFileGlobs, subFolderPath, (err) => {
+            let sourceSubFolderPath = path.join(sourceFolderPath, folderName);
+            let destSubFolderPath = path.join(destFolderPath, folderName);
+            let subFolderPath = path.join(internal_folder_path, folderName);
+
+            FolderSync._syncFolder(sourceSubFolderPath, destSubFolderPath,
+                deleteExtraneous, ignoreFileGlobs, subFolderPath, (err) => {
                 if (err) {
                     callback(err);
                     return;
@@ -106,9 +133,6 @@ class FolderSync {
                 return;
             }
 
-            let sourceFolderPath = path.join(sourceDirectory, internalFolderPath);
-            let destFolderPath = path.join(destDirectory, internalFolderPath);
-
             FolderSync._updateFiles(sourceFolderPath, destFolderPath, toBeAddedFileNames, (err) => {
                 if (err) {
                     callback(err);
@@ -119,6 +143,7 @@ class FolderSync {
             });
         };
 
+        // 删除目标文件夹指定的内容
         let processRemove = (toBeRemovedNames, toBeAddedFileNames, toBeAddedFolderNames) => {
             if (toBeRemovedNames.length === 0) {
                 processUpdateFiles(toBeAddedFileNames, toBeAddedFolderNames);
@@ -126,7 +151,7 @@ class FolderSync {
             }
 
             let fileName = toBeRemovedNames.pop();
-            let filePath = path.join(destDirectory, internalFolderPath, fileName);
+            let filePath = path.join(destFolderPath, fileName);
 
             fse.remove(filePath, (err) => {
                 if (err) {
@@ -144,7 +169,7 @@ class FolderSync {
                 return false;
             }
 
-            let filePath = path.join(internalFolderPath, fileName);
+            let filePath = path.join(internal_folder_path, fileName);
 
             for (let ignoreFile of ignoreFileGlobs) {
                 // https://github.com/isaacs/minimatch
@@ -153,8 +178,12 @@ class FolderSync {
                 // If set, then patterns without slashes will be matched against the basename
                 // of the path if it contains slashes. For example, a?b would match
                 // the path /xyz/123/acb, but not /xyz/acb/123.
-                // if (minimatch(filePath, ignoreFile, {matchBase: true})) {
-                if (minimatch(filePath, ignoreFile)) {
+                //
+                // 不过因为搜索文件是从第一层开始搜索，所以如果匹配模式为 a?b，当搜索到
+                // 路径 /xyz/acb 时，该项被匹配中，然后 /xyz/acb/123 就不会被搜索，
+                // 所以从结果上来说 /xyz/123/acb 和 not /xyz/acb/123 都按照预期地
+                // 被正确地排除了。
+                if (minimatch(filePath, ignoreFile, {matchBase: true})) {
                     return true;
                 }
             }
@@ -173,9 +202,7 @@ class FolderSync {
             });
         };
 
-        let sourceFolderPath = path.join(sourceDirectory, internalFolderPath);
-        let destFolderPath = path.join(destDirectory, internalFolderPath);
-
+        // 列举源文件夹和目标文件夹的内容
         FileUtils.list(sourceFolderPath, (err, sourceFileInfoList) => {
             if (err) {
                 callback(err);
@@ -245,6 +272,7 @@ class FolderSync {
     }
 
     /**
+     * 更新指定源目录与目标目录当中的一组文件
      *
      * @param {*} sourceFolderDirectory
      * @param {*} destFolderDirectory
@@ -277,6 +305,12 @@ class FolderSync {
     }
 
     /**
+     * 根据源文件更新目标文件
+     *
+     * - 如果目标文件不存在，则复制源文件为目标文件
+     * - 如果目标文件已存在：
+     *   - 如果目标文件的内容跟源文件不相同，则用源文件覆盖目标文件
+     *   - 如果内容相同，则返回成功。
      *
      * @param {*} sourceFilePath
      * @param {*} destFilePath
